@@ -1,16 +1,16 @@
 import argparse
-import re
 
 import joblib
 import pandas as pd
-from pythainlp import word_tokenize
-from pythainlp.corpus import thai_stopwords
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.model_selection import train_test_split
 from sklearn.naive_bayes import MultinomialNB
+from sklearn.naive_bayes import ComplementNB
 from sklearn.metrics import classification_report, accuracy_score
 
 from app.config import SENTIMENT_MODEL_PATH, VECTORIZER_PATH
+from app.ml.labels import canonical_label
+from app.nlp.text_cleaning import process_thai_text
 
 TEXT_COLUMN = (
     "ความคิดเห็นและข้อเสนอแนะเกี่ยวกับการทำงาน "
@@ -18,24 +18,7 @@ TEXT_COLUMN = (
 )
 LABEL_COLUMN = "Sentiment"
 
-BLANK_COMMENT_PATTERN = r'^(-|ไม่มี|ไม่มีครับ|ไม่มีค่ะ|ยังไม่มี|ไม่มีข้อเสนอแนะ|ok|ดีครับ|ดีค่ะ|\.{2,})$'
-
-stopwords = set(thai_stopwords())
-important_words = {'ไม่', 'ไม่มี', 'ยัง', 'แต่', 'ดี', 'แย่', 'มาก', 'น้อย'}
-stopwords = stopwords - important_words
-stopwords.update(['ครับ', 'ค่ะ', 'นะ', 'เลย', 'ๆ', 'ว่า', 'ทำ'])
-
-
-def process_thai_text(text: str) -> str:
-    text = str(text).strip()
-    text = re.sub(r'[^ก-๙a-zA-Z\s]', '', text)
-    tokens = word_tokenize(text, engine='newmm')
-    cleaned_tokens = [word for word in tokens if word not in stopwords and word.strip() != '']
-
-    if len(cleaned_tokens) == 0:
-        return "NO_COMMENT"
-    return " ".join(cleaned_tokens)
-
+BLANK_COMMENT_PATTERN = r'^(-|ไม่มี|ไม่มีครับ|ไม่มีค่ะ|ยังไม่มี|ไม่มีข้อเสนอแนะ|\.{2,})$'
 
 def load_and_clean_data(filepath: str) -> pd.DataFrame:
     df = pd.read_excel(filepath, sheet_name=0)
@@ -51,27 +34,71 @@ def load_and_clean_data(filepath: str) -> pd.DataFrame:
     return df_clean
 
 
-def train(df_clean: pd.DataFrame):
-    X = df_clean['cleaned_text']
-    y = df_clean[LABEL_COLUMN]
+def prepare_training_data(df_clean: pd.DataFrame) -> pd.DataFrame:
+    data = df_clean[['cleaned_text', LABEL_COLUMN]].copy()
+    data['label'] = data[LABEL_COLUMN].map(canonical_label)
 
-    vectorizer = TfidfVectorizer()
-    X_vector = vectorizer.fit_transform(X)
+    no_comment_count = data['cleaned_text'].eq('NO_COMMENT').sum()
+    data = data[data['cleaned_text'].ne('NO_COMMENT')]
+
+    label_counts = data.groupby('cleaned_text')['label'].nunique()
+    conflicting_texts = label_counts[label_counts > 1].index
+    conflict_count = data['cleaned_text'].isin(conflicting_texts).sum()
+    data = data[~data['cleaned_text'].isin(conflicting_texts)]
+    duplicate_count = data.duplicated(subset='cleaned_text').sum()
+    data = data.drop_duplicates(subset='cleaned_text').copy()
+
+    print(f"ตัดข้อความไม่มีสาระหลังตัดคำ: {no_comment_count} แถว")
+    print(f"ตัดข้อความที่มีป้ายกำกับขัดแย้งกัน: {conflict_count} แถว")
+    print(f"ตัดข้อความซ้ำ: {duplicate_count} แถว")
+    print(f"ข้อความไม่ซ้ำที่ใช้ฝึกและประเมิน: {len(data)} แถว")
+    return data
+
+
+def train_with_metrics(df_clean: pd.DataFrame):
+    data = prepare_training_data(df_clean)
+    X = data['cleaned_text']
+    y = data['label']
+    if y.nunique() < 2 or y.value_counts().min() < 2:
+        raise ValueError('แต่ละ sentiment ต้องมีอย่างน้อย 2 ข้อความที่ไม่ซ้ำกัน')
 
     X_train, X_test, y_train, y_test = train_test_split(
-        X_vector, y, test_size=0.2, random_state=42
+        X, y, test_size=0.2, random_state=42, stratify=y
     )
 
-    model = MultinomialNB()
-    model.fit(X_train, y_train)
+    vectorizer = TfidfVectorizer()
+    X_train_vector = vectorizer.fit_transform(X_train)
+    X_test_vector = vectorizer.transform(X_test)
 
-    predictions = model.predict(X_test)
+    model = ComplementNB(alpha=0.5)
+    model.fit(X_train_vector, y_train)
+
+    predictions = model.predict(X_test_vector)
 
     print("\n=== ผลการประเมินโมเดล ===")
     print("Accuracy:", round(accuracy_score(y_test, predictions) * 100, 2), "%\n")
     print("Details:")
     print(classification_report(y_test, predictions, zero_division=0))
 
+    report = classification_report(y_test, predictions, zero_division=0, output_dict=True)
+    metrics = {
+        'accuracy': float(accuracy_score(y_test, predictions)),
+        'macroF1': float(report['macro avg']['f1-score']),
+        'testRows': len(y_test),
+        'trainingRows': len(data),
+    }
+
+    vectorizer = TfidfVectorizer()
+    X_vector = vectorizer.fit_transform(X)
+    # model = MultinomialNB()
+    model = ComplementNB(alpha=0.5)
+    model.fit(X_vector, y)
+
+    return model, vectorizer, metrics
+
+
+def train(df_clean: pd.DataFrame):
+    model, vectorizer, _ = train_with_metrics(df_clean)
     return model, vectorizer
 
 
