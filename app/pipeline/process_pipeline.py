@@ -27,7 +27,7 @@ def process_pipeline(
 
         for i, ml_result in enumerate(batch):
             classification = classification_map.get(
-                i, {"categories": ["อื่นๆ"], "reason": "missing_from_response"}
+                i, {"categories": [], "reason": "missing_from_response"}
             )
             results.append({
                 **ml_result,
