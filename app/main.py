@@ -4,10 +4,12 @@ import logging
 from io import BytesIO
 
 from fastapi import FastAPI, Header, HTTPException, Request
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from starlette.concurrency import run_in_threadpool
 
 from app.config import AI_TRAINING_TOKEN
+from app.knowledge_base.compiler import KnowledgeCompileError, compile_knowledge_base
+from app.knowledge_base.qa import KnowledgeQAError, answer_question
 from app.nlp.keywords import extract_keywords
 from app.ml.predict import activate_model
 from app.pipeline.process_pipeline import process_pipeline
@@ -53,6 +55,33 @@ class TrainingResponse(BaseModel):
     trainingRows: int
 
 
+class KnowledgeCompileRequest(BaseModel):
+    source: dict
+    previous_articles: list[dict] = Field(default_factory=list)
+
+
+class KnowledgeCompileResponse(BaseModel):
+    title_th: str
+    title_en: str
+    summary_th: str
+    summary_en: str
+    markdown: str
+    tags: list[str]
+    related_period_ids: list[str]
+    suggested_questions: list[str]
+
+
+class KnowledgeQARequest(BaseModel):
+    question: str
+    articles: list[dict] = Field(default_factory=list)
+    locale: str = "th"
+
+
+class KnowledgeQAResponse(BaseModel):
+    answer: str
+    used_period_ids: list[str]
+
+
 @app.get("/health")
 def health_check():
     return {"status": "ok"}
@@ -72,6 +101,22 @@ def keywords(request: KeywordsRequest):
     if len(request.texts) > 200:
         raise HTTPException(status_code=413, detail="at most 200 comments per request")
     return {"keywords": [extract_keywords(text) for text in request.texts]}
+
+
+@app.post("/knowledge/compile", response_model=KnowledgeCompileResponse)
+def compile_knowledge(request: KnowledgeCompileRequest):
+    try:
+        return compile_knowledge_base(request.source, request.previous_articles)
+    except KnowledgeCompileError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+@app.post("/knowledge/ask", response_model=KnowledgeQAResponse)
+def ask_knowledge(request: KnowledgeQARequest):
+    try:
+        return answer_question(request.question, request.articles, request.locale)
+    except KnowledgeQAError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 def _train_uploaded_workbook(data: bytes) -> dict:

@@ -34,6 +34,17 @@ Backend ส่งข้อความแบบสำรวจที่ปกป
 ต่อหนึ่งคำตอบ และแสดงเฉพาะคำที่พบในอย่างน้อย 5 คำตอบของรอบสำรวจเดียวกัน
 ส่วนนี้อ่านจากข้อความจริง ไม่ใช้ `word_cloud_terms` ซึ่งเป็นข้อมูลตัวอย่างเดิม
 
+## LLM Knowledge Compiler
+
+`POST /knowledge/compile` รับเฉพาะ aggregate ที่ Backend คัดกรองตามกฎ n>=5 แล้ว เช่น
+คะแนนเฉลี่ย สัดส่วน sentiment หัวข้อ และ Department ที่มีจำนวนผู้ตอบเพียงพอ พร้อม summary
+ของบทความรอบก่อนหน้า จากนั้น Gemini compile เป็น JSON ที่มี summary ไทย/อังกฤษ,
+Markdown article, tags, related period ids และคำถามที่ควรสำรวจต่อ
+
+AI-Service **ไม่รับ raw employee comments ใน endpoint นี้** และ prompt กำหนดให้ใช้เฉพาะ
+หลักฐานใน input ห้ามสร้างตัวเลขหรืออนุมานบุคคล แนวทางนี้ดัดแปลงจาก LLM Wiki pattern ของ
+Andrej Karpathy: compile ความรู้ให้สะสมและเชื่อมกันด้วย index/backlinks แทนการค้น raw ใหม่ทุกครั้ง
+
 ## ทดสอบผ่านหน้าเว็บ
 
 ล็อกอินเป็นพนักงาน เปิด sidebar **My Surveys / แบบสอบถามของฉัน** กรอกคะแนนและ
