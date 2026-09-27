@@ -7,6 +7,7 @@ from fastapi import FastAPI, Header, HTTPException, Request
 from pydantic import BaseModel, Field
 from starlette.concurrency import run_in_threadpool
 
+from app.automation import router as automation_router
 from app.config import AI_TRAINING_TOKEN
 from app.knowledge_base.compiler import KnowledgeCompileError, compile_knowledge_base
 from app.knowledge_base.qa import KnowledgeQAError, answer_question
@@ -16,6 +17,7 @@ from app.pipeline.process_pipeline import process_pipeline
 from scripts.train_model import load_and_clean_data, save_model, train_with_metrics
 
 app = FastAPI(title="MT-Sense AI-Service")
+app.include_router(automation_router)
 training_lock = asyncio.Lock()
 logger = logging.getLogger(__name__)
 
