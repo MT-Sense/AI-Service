@@ -4,6 +4,8 @@
 Backend ส่งข้อความที่ลบข้อมูลระบุตัวตนแล้วมาที่ `POST /analyze` และใช้ผลลัพธ์บันทึก
 ใน `response_analysis` หมวดที่ส่งกลับเป็นรหัสเดียวกับ Backend:
 `work`, `team`, `manager`, `compensation`, `growth`, `benefits`.
+หนึ่ง request รับได้ 1–12 ข้อความ เพื่อให้ Backend รวมคำตอบเป็น batch เดียวและจำกัด
+ขนาด prompt ที่ส่งให้โมเดลจัดหมวดหมู่
 ชื่อคลาส sentiment ที่ส่งไป Backend คือ `pos`, `neg`, `neu` โดยโมเดลเก่าที่ใช้
 `nau` จะถูกแปลงเป็น `neu` ก่อนส่งออก และสคริปต์ฝึกจะใช้ `neu` สำหรับโมเดลใหม่
 

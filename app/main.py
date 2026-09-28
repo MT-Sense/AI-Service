@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 
 
 class AnalyzeRequest(BaseModel):
-    texts: list[str]
+    texts: list[str] = Field(min_length=1, max_length=12)
     confidence_threshold: float = 0.55
 
 
@@ -34,6 +34,7 @@ class AnalyzeResultItem(BaseModel):
     sentiment_score: float
     confidence: float
     categories: list[str]
+    emerging_topics: list[dict[str, str]]
     reason: str
     low_confidence: bool
 

@@ -1,5 +1,3 @@
-"""Topic IDs shared with Backend-Service's topics and dashboard queries."""
-
 CATEGORIES = {
     "work": "ภาระงาน เวลาและสภาพแวดล้อมการทำงาน",
     "team": "ทีมและเพื่อนร่วมงาน",

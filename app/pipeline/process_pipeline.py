@@ -27,11 +27,12 @@ def process_pipeline(
 
         for i, ml_result in enumerate(batch):
             classification = classification_map.get(
-                i, {"categories": [], "reason": "missing_from_response"}
+                i, {"categories": [], "emerging_topics": [], "reason": "missing_from_response"}
             )
             results.append({
                 **ml_result,
                 "categories": classification["categories"],
+                "emerging_topics": classification["emerging_topics"],
                 "reason": classification["reason"],
                 "low_confidence": ml_result["confidence"] < confidence_threshold,
             })
